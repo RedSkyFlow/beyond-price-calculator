@@ -83,10 +83,10 @@ export const MULTI_VENUE_ICP: Record<string, PricingTier[]> = {
     { tier: 'Tier 1', sizeTier: 'Other (exceed above)', measure: 'Store', captureAnnual: 'Contact us', captureEnablement: 'Bespoke', engageAnnual: 'Contact us', engageEnablement: 'Bespoke' },
   ],
   'Shopping Malls': [
-    { tier: 'Tier 3', sizeTier: 'Small', measure: 'Mall', minVal: 1, maxVal: 1, captureAnnual: 3125, captureEnablement: 625, engageAnnual: 4750, engageEnablement: 998, successFee: 20 },
-    { tier: 'Tier 2', sizeTier: 'Medium (<100APs)', measure: 'Mall', minVal: 1, maxVal: 3, captureAnnual: 14750, captureEnablement: '25%', engageAnnual: 21250, engageEnablement: '22.5%', successFee: 20 },
-    { tier: 'Tier 2', sizeTier: 'Large (>99 APs)', measure: 'Mall', minVal: 1, maxVal: 2, captureAnnual: 21250, captureEnablement: '25%', engageAnnual: 34750, engageEnablement: '17.5%', successFee: 20 },
-    { tier: 'Tier 1', sizeTier: 'Other (mixed use)', measure: 'Mall', captureAnnual: 'Contact us', captureEnablement: 'Bespoke', engageAnnual: 'Contact us', engageEnablement: 'Bespoke' },
+    { tier: 'Tier 3', sizeTier: 'Small (<100 APs)', measure: 'Mall', minVal: 1, maxVal: 1, minApsPerVenue: 1, maxApsPerVenue: 99, captureAnnual: 3125, captureEnablement: 625, engageAnnual: 4750, engageEnablement: 998, successFee: 20 },
+    { tier: 'Tier 2', sizeTier: 'Medium (<100 APs)', measure: 'Mall', minVal: 2, maxVal: 3, minApsPerVenue: 1, maxApsPerVenue: 99, captureAnnual: 14750, captureEnablement: '25%', engageAnnual: 21250, engageEnablement: '22.5%', successFee: 20 },
+    { tier: 'Tier 2', sizeTier: 'Large (>99 APs)', measure: 'Mall', minVal: 1, maxVal: 3, minApsPerVenue: 100, captureAnnual: 21250, captureEnablement: '25%', engageAnnual: 34750, engageEnablement: '17.5%', successFee: 20 },
+    { tier: 'Tier 1', sizeTier: 'Other (Contact Us)', measure: 'Mall', minVal: 4, captureAnnual: 'Contact us', captureEnablement: 'Bespoke', engageAnnual: 'Contact us', engageEnablement: 'Bespoke' },
   ],
 };
 

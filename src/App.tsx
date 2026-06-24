@@ -900,7 +900,7 @@ export default function App() {
                 )}
 
                 {/* Multi-Venue: APs per venue */}
-                {vertical in MULTI_VENUE_ICP && vertical !== 'Hotels' && vertical !== 'Shopping Malls' && (
+                {vertical in MULTI_VENUE_ICP && vertical !== 'Hotels' && (
                   <motion.div 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -908,7 +908,7 @@ export default function App() {
                   >
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                        Average APs per Venue
+                        {vertical === 'Shopping Malls' ? 'Average APs per Mall' : (vertical === 'Retail' ? 'Average APs per Store' : 'Average APs per Venue')}
                       </Label>
                       <Input 
                         type="number" 
