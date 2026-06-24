@@ -55,7 +55,41 @@ export default function App() {
   const auth = useAuth();
   const user = auth?.user;
   const signOut = auth?.signOut || (() => {});
-  const [clientName, setClientName] = useState('');
+
+  // Load distributor settings from localStorage
+  const getStoredDistributor = () => {
+    try {
+      const stored = localStorage.getItem('beyond_distributor_settings');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  };
+
+  const distributorSettings = useMemo(() => getStoredDistributor() || {}, []);
+
+  // Distributor Profile States
+  const [distributorBusinessName, setDistributorBusinessName] = useState<string>(distributorSettings.businessName || '');
+  const [distributorLogo, setDistributorLogo] = useState<string>(distributorSettings.logo || '');
+  const [agentName, setAgentName] = useState<string>(distributorSettings.agentName || '');
+  const [agentEmail, setAgentEmail] = useState<string>(distributorSettings.agentEmail || '');
+  const [agentPhone, setAgentPhone] = useState<string>(distributorSettings.agentPhone || '');
+  const [defaultMarkup, setDefaultMarkup] = useState<number>(Number(distributorSettings.defaultMarkup) || 0);
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState<number>(Number(distributorSettings.defaultExchangeRate) || 19.0);
+
+  // Modal Open State
+  const [isDistributorModalOpen, setIsDistributorModalOpen] = useState<boolean>(false);
+
+  // Client Details (Session-only)
+  const [clientName, setClientName] = useState(''); // Client Business Name
+  const [clientContactName, setClientContactName] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [clientAddress, setClientAddress] = useState('');
+
   const [vertical, setVertical] = useState<Vertical>('Indoor/Outdoor Attractions');
   const [measureValue, setMeasureValue] = useState<number>(0);
   const [avgApsPerVenue, setAvgApsPerVenue] = useState<number>(1);
@@ -66,19 +100,31 @@ export default function App() {
     shield: false,
     surveys: false,
   });
-  const [exchangeRate, setExchangeRate] = useState<number>(19.0); // ZAR per 1 GBP
+
+  const [exchangeRate, setExchangeRate] = useState<number>(() => {
+    const stored = getStoredDistributor();
+    return stored && stored.defaultExchangeRate ? Number(stored.defaultExchangeRate) : 19.0;
+  });
   const [hotelRooms, setHotelRooms] = useState<number>(0);
   const [isExporting, setIsExporting] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   
   // Markup & Profit Margin State
-  const [markupPercent, setMarkupPercent] = useState<number>(0);
+  const [markupPercent, setMarkupPercent] = useState<number>(() => {
+    const stored = getStoredDistributor();
+    return stored && stored.defaultMarkup ? Number(stored.defaultMarkup) : 0;
+  });
   const [isMarkupVisible, setIsMarkupVisible] = useState<boolean>(true);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isMarkupPanelOpen, setIsMarkupPanelOpen] = useState<boolean>(false);
 
   const handleReset = () => {
     setClientName('');
+    setClientContactName('');
+    setClientEmail('');
+    setClientPhone('');
+    setClientAddress('');
+
     setVertical('Indoor/Outdoor Attractions');
     setMeasureValue(0);
     setAvgApsPerVenue(1);
@@ -90,7 +136,12 @@ export default function App() {
       surveys: false,
     });
     setHotelRooms(0);
-    setMarkupPercent(0);
+
+    // Reset to distributor defaults if set
+    const stored = getStoredDistributor() || {};
+    setMarkupPercent(Number(stored.defaultMarkup) || 0);
+    setExchangeRate(Number(stored.defaultExchangeRate) || 19.0);
+
     setIsMarkupVisible(true);
     setIsExportModalOpen(false);
     setIsMarkupPanelOpen(false);
@@ -379,7 +430,7 @@ export default function App() {
       // Load logo image
       const loadLogo = () => new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
-        img.src = '/beyond-logo.png';
+        img.src = distributorLogo || '/beyond-logo.png';
         img.onload = () => resolve(img);
         img.onerror = reject;
       });
@@ -395,13 +446,13 @@ export default function App() {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
-        doc.text('Beyond', 15, 17);
+        doc.text(distributorBusinessName || 'Beyond', 15, 17);
       }
       
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
-      doc.text('Preferred Purple Partner', 15, 23);
+      doc.text(distributorBusinessName ? `${distributorBusinessName} - Purple Partner` : 'Preferred Purple Partner', 15, 23);
       
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
@@ -410,58 +461,114 @@ export default function App() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - 15, 23, { align: 'right' });
       
-      // Client Info Section (Starting higher up at y = 42 instead of 55)
+      // Two-column Prepared For / Prepared By metadata section
       doc.setTextColor(27, 32, 60);
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text(clientName || 'Client Proposal', 15, 42);
       
-      doc.setFontSize(9);
+      // Left Column: Client Details
+      doc.setFontSize(9.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Prepared For:', 15, 41);
+      
+      doc.setFontSize(11);
+      doc.text(clientName || 'Client Business Name', 15, 46.5);
+      
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 100, 100);
-      doc.text(`Vertical: ${vertical}`, 15, 50);
-      doc.text(`Package: ${selectedPackage}`, 15, 56);
-      doc.text(`Term: ${term} year${term > 1 ? 's' : ''}`, 15, 62);
-      doc.text(`Exchange Rate: 1 GBP = ${exchangeRate} ZAR`, 15, 68);
       
-      // Tier Badge (Starting higher at y=39 with height 12)
-      doc.setFillColor(99, 33, 255, 20);
-      doc.roundedRect(pageWidth - 80, 39, 65, 12, 2, 2, 'F');
-      doc.setTextColor(99, 33, 255);
-      doc.setFontSize(8);
+      let clientY = 51.5;
+      if (clientContactName) {
+        doc.text(`Contact: ${clientContactName}`, 15, clientY);
+        clientY += 4.5;
+      }
+      if (clientEmail || clientPhone) {
+        const contactStr = [clientEmail, clientPhone].filter(Boolean).join(' | ');
+        doc.text(contactStr, 15, clientY);
+        clientY += 4.5;
+      }
+      if (clientAddress) {
+        const addressLines = doc.splitTextToSize(clientAddress, 85);
+        doc.text(addressLines, 15, clientY);
+      }
+
+      // Right Column: Distributor / Agent Details
+      doc.setTextColor(27, 32, 60);
+      doc.setFontSize(9.5);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${calculation.tier} - ${calculation.sizeTier}`, pageWidth - 47.5, 47, { align: 'center' });
+      doc.text('Prepared By:', 115, 41);
       
-      // TCV Highlight (ZAR as primary)
+      doc.setFontSize(11);
+      doc.text(distributorBusinessName || 'Beyond WiFi', 115, 46.5);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      
+      let agentY = 51.5;
+      if (agentName) {
+        doc.text(`Agent: ${agentName}`, 115, agentY);
+        agentY += 4.5;
+      }
+      if (agentEmail || agentPhone) {
+        const agentContactStr = [agentEmail, agentPhone].filter(Boolean).join(' | ');
+        doc.text(agentContactStr, 115, agentY);
+        agentY += 4.5;
+      }
+      
+      // Vertical line separating columns
+      doc.setDrawColor(230, 230, 230);
+      doc.setLineWidth(0.5);
+      doc.line(107.5, 36, 107.5, 68);
+
+      // Now print calculation details (Vertical, Package, Term, Exchange Rate)
+      doc.setFillColor(248, 249, 252);
+      doc.roundedRect(15, 71, pageWidth - 30, 9, 1, 1, 'F');
+      
+      doc.setTextColor(120, 120, 120);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      
+      const metaRow = `Vertical: ${vertical}  |  Package: ${selectedPackage}  |  Term: ${term} Year${term > 1 ? 's' : ''}  |  Exchange Rate: 1 GBP = ${exchangeRate} ZAR`;
+      doc.text(metaRow, 20, 77);
+      
+      // Tier Badge
+      doc.setFillColor(99, 33, 255, 20);
+      doc.roundedRect(pageWidth - 75, 72, 55, 7, 1, 1, 'F');
+      doc.setTextColor(99, 33, 255);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${calculation.tier} - ${calculation.sizeTier}`, pageWidth - 47.5, 77, { align: 'center' });
+      
+      // TCV Highlight (ZAR as primary) - shifted y from 76 to 85, height 30, ends at 115
       if (exportMode === 'internal') {
         doc.setFillColor(248, 249, 252);
-        doc.roundedRect(15, 76, pageWidth - 30, 30, 2, 2, 'F');
+        doc.roundedRect(15, 85, pageWidth - 30, 30, 2, 2, 'F');
         
         doc.setTextColor(99, 33, 255);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text('TOTAL CONTRACT VALUE (TCV) COMPARISON', 25, 84);
+        doc.text('TOTAL CONTRACT VALUE (TCV) COMPARISON', 25, 93);
         
         doc.setFontSize(13);
-        doc.text(`Client Price: ${formatZar(calculation.markedUpTcv)}  (${formatCurrency(calculation.markedUpTcv)})`, 25, 93);
+        doc.text(`Client Price: ${formatZar(calculation.markedUpTcv)}  (${formatCurrency(calculation.markedUpTcv)})`, 25, 102);
         doc.setTextColor(100, 100, 100);
         doc.setFontSize(10);
-        doc.text(`Cost Price:   ${formatZar(calculation.tcv)}  (${formatCurrency(calculation.tcv)})`, 25, 100);
+        doc.text(`Cost Price:   ${formatZar(calculation.tcv)}  (${formatCurrency(calculation.tcv)})`, 25, 109);
       } else {
         doc.setFillColor(248, 249, 252);
-        doc.roundedRect(15, 76, pageWidth - 30, 30, 2, 2, 'F');
+        doc.roundedRect(15, 85, pageWidth - 30, 30, 2, 2, 'F');
         
         doc.setTextColor(99, 33, 255); // #6321FF
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text(exportMode === 'client' ? 'TOTAL CONTRACT VALUE (CLIENT PRICE)' : 'TOTAL CONTRACT VALUE (TCV)', 25, 84);
+        doc.text(exportMode === 'client' ? 'TOTAL CONTRACT VALUE (CLIENT PRICE)' : 'TOTAL CONTRACT VALUE (TCV)', 25, 93);
         
         doc.setFontSize(20);
-        doc.text(formatZar(p.tcv), 25, 96); // ZAR is primary (large)
+        doc.text(formatZar(p.tcv), 25, 105); // ZAR is primary (large)
         
         doc.setTextColor(100, 100, 100);
         doc.setFontSize(11);
-        doc.text(formatCurrency(p.tcv), pageWidth - 25, 96, { align: 'right' }); // GBP is secondary (small)
+        doc.text(formatCurrency(p.tcv), pageWidth - 25, 105, { align: 'right' }); // GBP is secondary (small)
       }
       
       const summaryLabel = vertical === 'Hotels' 
@@ -469,11 +576,15 @@ export default function App() {
         : `${calculation.isNonICP ? (vertical in MULTI_VENUE_ICP ? measureValue * avgApsPerVenue : apCount) : measureValue} ${calculation.measure}(s)`;
       
       doc.setFontSize(7.5);
-      doc.text(summaryLabel, pageWidth - 25, 101, { align: 'right' });
+      doc.setTextColor(100, 100, 100);
+      doc.text(summaryLabel, pageWidth - 25, 110, { align: 'right' });
+      
+      // Breakdown Table start Y offset
+      const breakdownTableStartY = 120;
       
       // Cost Breakdown Table
       autoTable(doc, {
-        startY: 112,
+        startY: breakdownTableStartY || 120,
         head: exportMode === 'internal'
           ? [['Item', 'Type', 'Cost Price (ZAR / GBP)', 'Client Price (ZAR / GBP)']]
           : [['Item', 'Type', 'Annual Price (ZAR)', 'Annual Price (GBP)']],
@@ -617,6 +728,13 @@ export default function App() {
             <span className="hidden lg:inline">{user?.email}</span>
           </div>
           <button 
+            onClick={() => setIsDistributorModalOpen(true)}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+            title="Distributor Branding & Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+          <button 
             onClick={handleReset}
             className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
             title="Reset Calculator"
@@ -664,30 +782,73 @@ export default function App() {
               <CardHeader className="bg-white border-b border-slate-100">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-[#6321FF]" />
-                  Client Details
+                  Client & Deal Details
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-5">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-700">Client Name</Label>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">Client Business Name</Label>
                   <Input 
-                    placeholder="Enter client name" 
+                    placeholder="e.g. Acme Corp" 
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
-                    className="border-slate-200"
+                    className="border-slate-200 text-sm"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-700">Industry Vertical</Label>
-                  <Select value={vertical} onValueChange={(v) => { setVertical(v as Vertical); setMeasureValue(0); setApCount(0); setHotelRooms(0); setAvgApsPerVenue(1); }}>
-                    <SelectTrigger className="border-slate-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {verticals.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Contact Person Name</Label>
+                    <Input 
+                      placeholder="e.g. John Doe" 
+                      value={clientContactName}
+                      onChange={(e) => setClientContactName(e.target.value)}
+                      className="border-slate-200 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Contact Email</Label>
+                    <Input 
+                      type="email"
+                      placeholder="e.g. john@acme.com" 
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
+                      className="border-slate-200 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Contact Phone</Label>
+                    <Input 
+                      placeholder="e.g. +27 82 000 0000" 
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      className="border-slate-200 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Industry Vertical</Label>
+                    <Select value={vertical} onValueChange={(v) => { setVertical(v as Vertical); setMeasureValue(0); setApCount(0); setHotelRooms(0); setAvgApsPerVenue(1); }}>
+                      <SelectTrigger className="border-slate-200 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {verticals.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">Client Address</Label>
+                  <textarea 
+                    placeholder="Enter client physical address" 
+                    value={clientAddress}
+                    onChange={(e) => setClientAddress(e.target.value)}
+                    className="flex min-h-[50px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -1472,6 +1633,216 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {/* Distributor Settings Modal */}
+      {isDistributorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-slate-100 mx-4 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-[#6321FF]" />
+                Distributor Settings & Defaults
+              </h3>
+              <button 
+                onClick={() => setIsDistributorModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Logo Upload Section */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Distributor Logo</Label>
+                <div className="flex items-center gap-4 p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                  {distributorLogo ? (
+                    <div className="relative w-24 h-12 bg-white border border-slate-150 rounded-lg p-1 flex items-center justify-center">
+                      <img src={distributorLogo} alt="Logo Preview" className="max-h-full max-w-full object-contain" />
+                      <button 
+                        type="button"
+                        onClick={() => setDistributorLogo('')}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer"
+                        title="Remove Logo"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-24 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400 font-semibold border border-slate-200">
+                      No Logo
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 1024 * 1024) {
+                            alert("Logo image file size must be less than 1MB.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setDistributorLogo(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                      id="distributor-logo-upload"
+                    />
+                    <label 
+                      htmlFor="distributor-logo-upload"
+                      className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border border-[#6321FF] text-[#6321FF] hover:bg-[#6321FF]/5 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Choose File
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-1">Recommended: PNG/JPG/SVG, max 1MB. Auto-scaled for PDF headers.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Distributor profile details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-600">Business Name</Label>
+                  <Input 
+                    value={distributorBusinessName}
+                    onChange={(e) => setDistributorBusinessName(e.target.value)}
+                    placeholder="e.g. Beyond WiFi"
+                    className="border-slate-200 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-600">Sales Agent Name</Label>
+                  <Input 
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    placeholder="e.g. Adam Parts"
+                    className="border-slate-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-600">Contact Email</Label>
+                  <Input 
+                    type="email"
+                    value={agentEmail}
+                    onChange={(e) => setAgentEmail(e.target.value)}
+                    placeholder="e.g. sales@company.com"
+                    className="border-slate-200 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-600">Contact Phone</Label>
+                  <Input 
+                    value={agentPhone}
+                    onChange={(e) => setAgentPhone(e.target.value)}
+                    placeholder="e.g. +27 82 123 4567"
+                    className="border-slate-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Calculator Defaults</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-600">Default Markup (%)</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number"
+                        value={defaultMarkup}
+                        onChange={(e) => setDefaultMarkup(Math.max(0, Number(e.target.value)))}
+                        className="border-slate-200 pr-6 font-semibold text-sm text-slate-800"
+                        min={0}
+                        max={500}
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-600">Default Exchange Rate (ZAR/GBP)</Label>
+                    <Input 
+                      type="number"
+                      value={defaultExchangeRate}
+                      onChange={(e) => setDefaultExchangeRate(Math.max(0, Number(e.target.value)))}
+                      className="border-slate-200 font-semibold text-sm text-slate-800"
+                      step={0.1}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
+              <button 
+                type="button"
+                onClick={() => {
+                  if (confirm("Are you sure you want to restore standard system settings? This will clear your custom profile defaults.")) {
+                    localStorage.removeItem('beyond_distributor_settings');
+                    setDistributorBusinessName('');
+                    setDistributorLogo('');
+                    setAgentName('');
+                    setAgentEmail('');
+                    setAgentPhone('');
+                    setDefaultMarkup(0);
+                    setDefaultExchangeRate(19.0);
+                    setMarkupPercent(0);
+                    setExchangeRate(19.0);
+                    setIsDistributorModalOpen(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-full border border-red-200 hover:bg-red-55 text-red-600 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Clear Settings
+              </button>
+              
+              <div className="flex gap-2">
+                <button 
+                  type="button"
+                  onClick={() => setIsDistributorModalOpen(false)}
+                  className="px-4 py-2 rounded-full border border-slate-200 hover:bg-slate-50 font-bold text-xs text-slate-500 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    const settings = {
+                      businessName: distributorBusinessName,
+                      logo: distributorLogo,
+                      agentName,
+                      agentEmail,
+                      agentPhone,
+                      defaultMarkup,
+                      defaultExchangeRate
+                    };
+                    localStorage.setItem('beyond_distributor_settings', JSON.stringify(settings));
+                    
+                    // Immediately apply current calculator state values
+                    setMarkupPercent(defaultMarkup);
+                    setExchangeRate(defaultExchangeRate);
+                    setIsDistributorModalOpen(false);
+                  }}
+                  className="px-5 py-2 rounded-full bg-[#6321FF] hover:bg-[#4E1AD4] text-white font-bold text-xs transition-colors cursor-pointer shadow-md shadow-[#6321FF]/20"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Export Mode Selection Modal */}
       {isExportModalOpen && (
